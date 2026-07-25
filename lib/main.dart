@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -322,8 +323,59 @@ class _LoginPageState extends State<LoginPage> {
   }
 }
 
-class DashboardPage extends StatelessWidget {
+class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
+
+  @override
+  State<DashboardPage> createState() => _DashboardPageState();
+}
+
+class _DashboardPageState extends State<DashboardPage> {
+  bool _isSubmitting = false;
+
+  Future<void> _submitIncident() async {
+    final user = FirebaseAuth.instance.currentUser;
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      await FirebaseFirestore.instance.collection('incidents').add({
+        'title': 'Citizen report from mobile app',
+        'description': 'A user triggered the shared incident workflow from the phone app.',
+        'severity': 'high',
+        'status': 'pending',
+        'source': 'mobile',
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'uid': user?.uid ?? 'guest',
+      });
+
+      await FirebaseFirestore.instance.collection('alerts').add({
+        'title': 'Mobile alert broadcast',
+        'description': 'An alert was pushed from the phone app to the admin portal.',
+        'severity': 'high',
+        'status': 'open',
+        'source': 'mobile',
+        'createdAt': FieldValue.serverTimestamp(),
+        'uid': user?.uid ?? 'guest',
+      });
+
+      if (!mounted) return;
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(content: Text('Incident sent to the admin portal and backend.')),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      scaffoldMessenger.showSnackBar(
+        SnackBar(content: Text('Failed to send incident: $error')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -569,12 +621,14 @@ class DashboardPage extends StatelessWidget {
           title: 'Report Incident',
           label: 'Form',
           description: 'Log suspicious activity or file a situational report securely.',
+          onTap: _isSubmitting ? null : _submitIncident,
         ),
         _ActionCard(
           icon: Icons.videocam,
           title: 'Record & Send',
           label: 'Ready',
           description: 'Initiate secure stealth recording and transmit to control center.',
+          onTap: () {},
         ),
         _AlertsCard(colorScheme: Theme.of(context).colorScheme),
       ],
@@ -663,18 +717,20 @@ class _ActionCard extends StatelessWidget {
     required this.title,
     required this.label,
     required this.description,
+    this.onTap,
   });
 
   final IconData icon;
   final String title;
   final String label;
   final String description;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return InkWell(
-      onTap: () {},
+      onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
         decoration: BoxDecoration(
